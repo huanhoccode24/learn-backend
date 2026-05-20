@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+}
+
+  @theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: #E96E4A;
+  --color-primary-foreground: #ffffff;
+  --animate-toast-progress: toast-progress 4s linear forwards;
+  --animate-spin-slow: spin 3s linear infinite;
+
+  @keyframes toast-progress {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+  }
+
+  @keyframes slideInLeft {
+    from { transform: scaleX(0); transform-origin: left; }
+    to { transform: scaleX(1); transform-origin: left; }
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tinh chỉnh typography toàn cục */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-bold tracking-tight text-slate-900;
+}
+
+/* Custom Selection color */
+::selection {
+  background-color: rgba(233, 110, 74, 0.3);
+  color: #000;
+}
+
+/* Custom scrollbar cho Mục lục blog */
+.toc-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.toc-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.toc-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+.toc-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+.toc-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e2e8f0 transparent;
+}
+
+/* TipTap Collaboration Cursor styles */
+.collaboration-cursor__caret {
+  border-left: 2px solid var(--collaboration-cursor-color, #E96E4A);
+  border-right: 2px solid var(--collaboration-cursor-color, #E96E4A);
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+
+.collaboration-cursor__label {
+  border-radius: 4px 4px 4px 0;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  left: -2px;
+  line-height: normal;
+  padding: 0.1rem 0.4rem;
+  position: absolute;
+  top: -1.6em;
+  user-select: none;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+/* Hiển thị tên khi hover hoặc cursor di chuyển */
+.collaboration-cursor__caret:hover .collaboration-cursor__label,
+.ProseMirror:focus .collaboration-cursor__label {
+  opacity: 1;
+}
+
+/* Custom scrollbar cho bảng danh sách */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #E96E4A transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #E96E4A;
+  opacity: 0.5;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #d15d3b;
+}

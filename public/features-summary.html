@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài liệu Hệ thống Auth & Security</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .feature-block { margin-bottom: 3rem; background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .step-list { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 1rem; color: #4B5563; }
+        .step-list li { margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased p-4 md:p-8 lg:px-32">
+
+    <header class="mb-10 block text-center">
+        <h1 class="text-4xl font-bold text-blue-700 mb-2">TỔNG HỢP KIẾN TRÚC & CHỨC NĂNG AUTHENTICATION</h1>
+        <p class="text-lg text-gray-600">Báo cáo hệ thống với Next.js 15, Auth.js (v5) & PostgreSQL</p>
+    </header>
+
+    <main>
+        <!-- 1. CẤU HÌNH NEXT-AUTH -->
+        <section class="feature-block">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-900 border-b pb-2">1. Cấu hình Cốt lõi Next-Auth & Edge Middleware</h2>
+            <p class="mb-3">Kiến trúc tách làm 2 file (<code>auth.config.ts</code> và <code>auth.ts</code>) nhằm đảm bảo Middleware của Next.js (chạy trên Edge Runtime) không bị báo lỗi khi import các thư viện Node.js nguyên thủy (như <code>bcryptjs</code>, <code>pg</code>).</p>
+            
+            <h3 class="text-xl font-medium mt-4 mb-2 text-blue-600">Các bước thực hiện:</h3>
+            <ul class="step-list">
+                <li>Tạo <code>auth.config.ts</code> chỉ chứa Providers trống và Callbacks, xuất ra Edge middleware.</li>
+                <li>Tạo <code>auth.ts</code> kết nối Adapter <code>@auth/pg-adapter</code> và khởi tạo Providers thật sự (Credentials, Github, Google).</li>
+                <li>Tạo thư mục API cho Next-Auth: <code>src/app/api/auth/[...nextauth]/route.ts</code></li>
+            </ul>
+
+            <h3 class="text-lg font-medium mt-4 mb-2">Ví dụ Code - Phân lớp Middleware bằng Callbacks (auth.config.ts):</h3>
+            <pre><code class="language-typescript">
+export const authConfig = {
+  pages: { signIn: '/login' },
+  session: { strategy: 'jwt' },
+  callbacks: {
+    authorized({ auth, request }) {
+      const isLoggedIn = !!auth?.user;
+      const isOnDashboard = request.nextUrl.pathname.startsWith('/dashboard');
+
+      // Chặn đường dẫn dashboard nếu chưa đăng nhập
+      if (!isLoggedIn && isOnDashboard) return false; 
+      return true;
+    }
+  },
+  providers: [] // Khai báo trống cho Edge
+};
+            </code></pre>
+        </section>
+
+        <!-- 2. ĐĂNG KÝ -->
+        <section class="feature-block">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-900 border-b pb-2">2. Đăng ký & Mã hoá Mật khẩu (Register)</h2>
+            <p class="mb-3">Cho phép người dùng tạo tài khoản. Mật khẩu được mã hóa an toàn trước khi lưu vào PostgreSQL.</p>
+            
+            <h3 class="text-xl font-medium mt-4 mb-2 text-blue-600">Các bước thực hiện & Thư viện sử dụng:</h3>
+            <ul class="step-list">
+                <li><strong class="text-gray-800">Thư viện:</strong> <code>zod</code> (Validation form), <code>bcryptjs</code> (Hashing mật khẩu), <code>pg</code> (Query DB).</li>
+                <li><strong class="text-gray-800">Bước 1:</strong> Zod kiểm tra dữ liệu đầu vào.</li>
+                <li><strong class="text-gray-800">Bước 2:</strong> Query kiểm tra trùng email (SQL thô: <code>SELECT id FROM users</code>).</li>
+                <li><strong class="text-gray-800">Bước 3:</strong> Mã hoá pass: <code>await bcrypt.hash(password, 10)</code>.</li>
+                <li><strong class="text-gray-800">Bước 4:</strong> Insert vào PostgreSQL và trả về kết quả cho phía Client hiển thị.</li>
+            </ul>
+
+            <h3 class="text-lg font-medium mt-4 mb-2">Ví dụ Code - Server Action Đăng ký (actions/auth/register.ts):</h3>
+            <pre><code class="language-typescript">
+import bcrypt from 'bcryptjs';
+import pool from '@/lib/db';
+
+export const register = async (values) => {
+  // 1. Phân bổ và validate
+  const { email, password, name } = values;
+
+  // 2. Hash Password
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // 3. Lưu vào Database
+  await pool.query(
+    'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4)',
+    [name, email, hashedPassword, 'USER']
+  );
+
+  return { success: 'Đăng ký tài khoản thành công!' };
+};
+            </code></pre>
+        </section>
+
+        <!-- 3. ĐĂNG NHẬP credentials-->
+        <section class="feature-block">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-900 border-b pb-2">3. Đăng nhập Auth.js (Login)</h2>
+            
+            <h3 class="text-xl font-medium mt-4 mb-2 text-blue-600">Các bước thực hiện:</h3>
+            <ul class="step-list">
+                <li><strong class="text-gray-800">Tích hợp Provider:</strong> Khai báo thẻ Credentials trong mảng <code>providers</code> tại <code>auth.ts</code>.</li>
+                <li><strong class="text-gray-800">Khớp dữ liệu:</strong> Query user qua email hiện có, sử dụng <code>bcrypt.compare</code> để xử lý giải mã và đối chiếu mật khẩu.</li>
+                <li><strong class="text-gray-800">Kích hoạt Server Action:</strong> Gọi hàm <code>signIn('credentials', { email, pass })</code> tại UI Client.</li>
+                <li><strong class="text-gray-800">Xử lý NextAuth Error:</strong> Nếu sai thì Catch lấy <code>AuthError -> CredentialsSignin</code>. Chú ý luôn <code>throw error</code> nếu redirect.</li>
+            </ul>
+
+            <h3 class="text-lg font-medium mt-4 mb-2">Ví dụ Code - Hàm gọi Login Server Action (actions/auth/login.ts):</h3>
+            <pre><code class="language-typescript">
+import { signIn } from '@/auth';
+import { AuthError } from 'next-auth';
+
+export const login = async (values) => {
+  try {
+    // Kích hoạt Middleware NextAuth auth.ts đăng nhập
+    await signIn('credentials', {
+      email,
+      password,
+      redirectTo: '/dashboard', 
+    });
+  } catch (error) {
+    if (error instanceof AuthError) {
+      if (error.type === 'CredentialsSignin') return { error: 'Sai mật khẩu!' }
+    }
+    throw error; // Quan trọng để module Redirect Next.js chạy tiếp
+  }
+};
+            </code></pre>
+        </section>
+
+        <!-- 4. TWO-FACTOR AUTHENTICATION OTP -->
+        <section class="feature-block border-l-4 border-blue-500">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-900 border-b pb-2">4. Bảo mật Hai Lớp (2FA OTP) qua Email</h2>
+            <p class="mb-3">Logic bảo mật cao nhất: Bắt buộc user (bất kể dùng mật khẩu hay OAuth) phải nhận được mã OTP trên Email rồi mới cho vào xem dashboard.</p>
+            
+            <h3 class="text-xl font-medium mt-4 mb-2 text-blue-600">Các bước phát triển:</h3>
+            <ul class="step-list">
+                <li><strong class="text-gray-800">Tạo mã Tự động:</strong> Bắt sự kiện <code>signIn</code> bên trong <code>auth.ts</code>. Cứ có người đăng nhập đúng mật khẩu => Dùng thư viện <code>crypto</code> sinh ngẫu nhiên số 6 chữ số, thời hạn 5 phút, lưu vào DB bảng <code>two_factor_tokens</code> (xóa mã cũ của email đó tránh rác).</li>
+                <li><strong class="text-gray-800">Gửi Email (Nodemailer):</strong> Lấy số đó đẩy qua SMTP Gmail <code>transporter.sendMail</code> gửi cho user (chỉnh HTML mail cho đẹp).</li>
+                <li><strong class="text-gray-800">Cờ Session (Callback JWT):</strong> Đánh dấu property <code>token.isTwoFactorVerified = false</code> ở session ban đầu. Middleware Next.js đọc giá trị này và redirect user về trang nhập <code>/verify-otp</code>.</li>
+                <li><strong class="text-gray-800">Xác thực phía Server:</strong> Nhận mã người dùng nhập, query database. Kiểm tra trùng khớp và thời hạn <code>(expires < Date.now)</code>.
+                <li><strong class="text-gray-800">Mở Khóa:</strong> Nếu đúng, xóa record khỏi DB. Thiết lập Cookie <code>2fa_verified</code> bằng <code>next/headers cookies().set()</code> nhằm override bug Session bên Next-Auth => Middleware thông qua.</li>
+            </ul>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div>
+                     <h3 class="text-lg font-medium mt-4 mb-2">Bắt sự kiện (auth.ts):</h3>
+<pre><code class="language-typescript">
+callbacks: {
+  async signIn({ user }) {
+    if (user.email) {
+      // Logic gửi 2FA OTP tự động
+      const tokenObj = await generateTwoFactorToken(user.email);
+      await sendTwoFactorTokenEmail(tokenObj.email, tokenObj.token);
+    }
+    return true; // Cho phép tạo session 
+  },
+}
+</code></pre>
+                </div>
+                <div>
+                     <h3 class="text-lg font-medium mt-4 mb-2">Sinh Token 6 số ngẫu nhiên:</h3>
+<pre><code class="language-typescript">
+import crypto from 'crypto';
+
+export const generateTwoFactorToken = async (email) => {
+  // random từ 100000 => 999999
+  const token = crypto.randomInt(100000, 1000000).toString(); 
+  const expires = new Date(new Date().getTime() + 5 * 60 * 1000); // 5 phút
+
+  // Xoá rác + insert record mới xuống PosgeSQL ...
+  return { email, token, expires };
+};
+</code></pre>                   
+                </div>
+            </div>
+
+            <h3 class="text-lg font-medium mt-4 mb-2">Mở rào tại Middleware khi OTP đúng (auth.config.ts):</h3>
+            <pre><code class="language-typescript">
+import { cookies } from 'next/headers';
+
+authorized({ auth, request }) {
+  // Kiểm tra cờ JWT
+  let isVerifiedOTP = auth?.user?.isTwoFactorVerified === true;
+
+  // FIX BUG NextAuth bằng Cookie tự tạo khi giải mã Server Action
+  if (request.cookies.get('2fa_verified')?.value === auth?.user?.email) {
+     isVerifiedOTP = true;
+  }
+
+  // Khóa cổng
+  if (isLoggedIn && !isVerifiedOTP && !isOnVerifyPage) {
+     return Response.redirect('/verify-otp');
+  }
+}
+            </code></pre>   
+        </section>
+
+    </main>
+    <footer class="text-center text-gray-500 mt-10 pb-8 text-sm">
+        Được tổng hợp từ Codebase lúc 2026-04-17
+    </footer>
+</body>
+</html>

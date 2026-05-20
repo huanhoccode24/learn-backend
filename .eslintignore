@@ -1,0 +1,5 @@
+migrate-simple.js
+scripts/migrate-posts.js
+scripts/migrate-profile-fields.js
+node_modules
+.next
