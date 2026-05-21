@@ -199,7 +199,7 @@ export default function ProfilePage() {
             <h2 className="text-sm font-bold text-slate-800 tracking-tight">Account Management</h2>
             
             {/* Photo Box */}
-            <div className="w-full aspect-[4/3] rounded-[8px] bg-[#f4e6e1] relative flex items-center justify-center overflow-hidden border border-gray-100 transition-all hover:border-primary/30">
+            <div className="w-full aspect-4/3 rounded-[8px] bg-[#f4e6e1] relative flex items-center justify-center overflow-hidden border border-gray-100 transition-all hover:border-primary/30">
               {profile.image ? (
                 <Image 
                   src={profile.image} 
