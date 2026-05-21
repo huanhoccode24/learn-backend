@@ -9,6 +9,7 @@ import { Loader2, Bookmark, MessageCircle, Eye } from 'lucide-react';
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSession } from 'next-auth/react';
 
 interface Heading { id: string; text: string; level: number }
 
@@ -141,6 +142,24 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
   const { headings, activeId } = useHeadings(post);
   const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
 
+  interface Comment {
+    id: string;
+    postId: string;
+    userId: string;
+    parentId: string | null;
+    content: string;
+    createdAt: string;
+    userName: string;
+    userImage: string | null;
+  }
+
+  const { data: session } = useSession();
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [replyToId, setReplyToId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+
   useEffect(() => {
     async function fetchPost() {
       try {
@@ -176,6 +195,86 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
     }
   }, [post]);
 
+  useEffect(() => {
+    if (!post) return;
+    async function fetchComments() {
+      try {
+        const res = await axios.get(`/api/comments?postId=${post?.id}`);
+        setComments(res.data);
+      } catch (err) {
+        console.error('Lỗi khi tải bình luận:', err);
+      }
+    }
+    fetchComments();
+  }, [post]);
+
+  const handleAddComment = async (e: React.FormEvent, parentId: string | null = null) => {
+    e.preventDefault();
+    if (!post || submitting) return;
+
+    const text = parentId ? replyText : commentText;
+    if (!text || text.trim() === '') return;
+
+    setSubmitting(true);
+    try {
+      const res = await axios.post('/api/comments', {
+        postId: post.id,
+        content: text,
+        parentId
+      });
+
+      setComments(prev => [...prev, res.data]);
+      
+      if (parentId) {
+        setReplyText('');
+        setReplyToId(null);
+      } else {
+        setCommentText('');
+      }
+    } catch (err: unknown) {
+      console.error('Lỗi khi gửi bình luận:', err);
+      let errorMsg = 'Có lỗi xảy ra, vui lòng thử lại.';
+      if (axios.isAxiosError(err)) {
+        errorMsg = err.response?.data?.error || errorMsg;
+      }
+      alert(errorMsg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHrs = Math.floor(diffMin / 60);
+    const diffDays = Math.floor(diffHrs / 24);
+
+    if (diffMin < 1) return 'vừa xong';
+    if (diffMin < 60) return `${diffMin} phút trước`;
+    if (diffHrs < 24) return `${diffHrs} giờ trước`;
+    if (diffDays < 7) return `${diffDays} ngày trước`;
+    return `${date.getDate()} tháng ${date.getMonth() + 1}, ${date.getFullYear()}`;
+  };
+
+  const getRepliesForRoot = (rootId: string) => {
+    const list: Comment[] = [];
+    const queue = [rootId];
+    
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      const directReplies = comments.filter(c => c.parentId === currentId);
+      directReplies.forEach(reply => {
+        if (!list.some(item => item.id === reply.id)) {
+          list.push(reply);
+          queue.push(reply.id);
+        }
+      });
+    }
+    return list.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -193,6 +292,11 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
 
       <style dangerouslySetInnerHTML={{
         __html: `
+        @import url('https://fonts.googleapis.com/css2?family=Mulish:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+        
+        * {
+          font-family: 'Muli', 'Mulish', sans-serif !important;
+        }
         .prose ul, .prose ol { list-style: none; padding-left: 0; margin-bottom: 2rem; }
         .prose ul li { position: relative; padding-left: 1.5rem; margin-bottom: 0.75rem; color: #1e293b; font-size: 1.125rem; line-height: 1.9; font-family: var(--font-lora), Georgia, serif; }
         .prose ul li::before {
@@ -253,7 +357,7 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
                 
                 <div className="flex items-center gap-1.5 capitalize">
                   <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                  <span>3 Bình luận</span>
+                  <span>{comments.length} Bình luận</span>
                 </div>
                 
                 <span className="w-1 h-1 rounded-full bg-slate-600 hidden md:inline-block"></span>
@@ -300,6 +404,250 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
               className="prose max-w-none w-full"
               dangerouslySetInnerHTML={{ __html: post.content }}
             />
+
+            {/* Comments Section */}
+            <div className="mt-16 pt-12 border-t border-slate-100">
+              <div className="flex items-center gap-4 mb-10">
+                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight shrink-0">
+                  {comments.length} Comment{comments.length !== 1 ? 's' : ''}
+                </h3>
+                <div className="h-px w-full bg-slate-100"></div>
+              </div>
+
+              {/* Render danh sách bình luận */}
+              {comments.filter(c => !c.parentId).length > 0 && (
+                <div className="space-y-8 mb-12">
+                  {comments.filter(c => !c.parentId).map(rootComment => {
+                    const replies = getRepliesForRoot(rootComment.id);
+                    return (
+                      <div key={rootComment.id} className="relative">
+                        {/* Bình luận gốc */}
+                        <div className="flex gap-4">
+                          {/* Avatar */}
+                          <div className="shrink-0">
+                            {rootComment.userImage ? (
+                              <Image
+                                src={rootComment.userImage}
+                                alt={rootComment.userName}
+                                width={40}
+                                height={40}
+                                unoptimized
+                                className="w-10 h-10 rounded-full object-cover border border-slate-100"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-[#E96E4A] font-bold text-sm select-none">
+                                {rootComment.userName ? rootComment.userName.charAt(0).toUpperCase() : 'U'}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Nội dung */}
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-[13px] text-slate-900">
+                                @{rootComment.userName}
+                              </span>
+                              <span className="text-slate-500 text-[12px] font-normal">
+                                {formatRelativeTime(rootComment.createdAt)}
+                              </span>
+                            </div>
+                            
+                            <p className="text-slate-800 text-[14px] leading-relaxed mt-1.5 font-normal">
+                              {rootComment.content}
+                            </p>
+
+                            {/* Nút Reply */}
+                            {session && (
+                              <div className="mt-2 flex items-center gap-4">
+                                <button
+                                  onClick={() => setReplyToId(replyToId === rootComment.id ? null : rootComment.id)}
+                                  className="bg-[#404040] hover:bg-[#2d2d2d] text-white text-[10px] font-bold uppercase tracking-wider px-3.5 py-1.5 rounded-[3px] transition-colors"
+                                >
+                                  {replyToId === rootComment.id ? 'Cancel' : 'Reply'}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Form Reply ngay dưới root comment nếu click Reply */}
+                        {replyToId === rootComment.id && session && (
+                          <div className="mt-4 ml-14 max-w-xl">
+                            <form onSubmit={(e) => handleAddComment(e, rootComment.id)} className="space-y-3">
+                              <textarea
+                                value={replyText}
+                                onChange={(e) => setReplyText(e.target.value)}
+                                placeholder={`Trả lời ${rootComment.userName}...`}
+                                rows={3}
+                                className="w-full border-2 border-slate-200 rounded-[4px] p-3 text-[14px] placeholder:text-[14px] placeholder:text-slate-400 outline-hidden focus:border-[#E96E4A] transition"
+                                required
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  type="submit"
+                                  disabled={submitting}
+                                  className="bg-[#E96E4A] text-white text-[12px] font-semibold px-4 py-2 uppercase hover:bg-[#d85c39] transition-colors rounded-[3px] tracking-wider"
+                                >
+                                  {submitting ? 'Submitting...' : 'Submit'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReplyToId(null);
+                                    setReplyText('');
+                                  }}
+                                  className="border border-slate-300 text-slate-500 text-[10px] font-extrabold px-4 py-2 uppercase hover:bg-slate-50 transition-colors rounded-[3px] tracking-wider"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+
+                        {/* Đường kẻ nối xuống các comment con nếu có reply */}
+                        {replies.length > 0 && (
+                          <div className="absolute left-[20px] top-[48px] bottom-4 w-px bg-slate-100"></div>
+                        )}
+
+                        {/* Danh sách bình luận con */}
+                        {replies.length > 0 && (
+                          <div className="mt-6 ml-14 space-y-6">
+                            {replies.map(reply => (
+                              <div key={reply.id} className="relative flex gap-4">
+                                {/* Avatar */}
+                                <div className="shrink-0">
+                                  {reply.userImage ? (
+                                    <Image
+                                      src={reply.userImage}
+                                      alt={reply.userName}
+                                      width={32}
+                                      height={32}
+                                      unoptimized
+                                      className="w-8 h-8 rounded-full object-cover border border-slate-100"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-[#E96E4A] font-bold text-xs select-none">
+                                      {reply.userName ? reply.userName.charAt(0).toUpperCase() : 'U'}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Nội dung con */}
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-[13px] text-slate-900">
+                                      @{reply.userName}
+                                    </span>
+                                    <span className="text-slate-500 text-[12px] font-normal">
+                                      {formatRelativeTime(reply.createdAt)}
+                                    </span>
+                                  </div>
+                                  
+                                  <p className="text-slate-800 text-[14px] leading-relaxed mt-1 font-normal">
+                                    {reply.content}
+                                  </p>
+
+                                  {/* Nút Reply cho comment con */}
+                                  {session && (
+                                    <div className="mt-2 flex items-center gap-4">
+                                      <button
+                                        onClick={() => setReplyToId(replyToId === reply.id ? null : reply.id)}
+                                        className="bg-[#404040] hover:bg-[#2d2d2d] text-white text-[9px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-[3px] transition-colors"
+                                      >
+                                        {replyToId === reply.id ? 'Cancel' : 'Reply'}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Form Reply phụ ngay dưới comment con nếu click Reply */}
+                                {replyToId === reply.id && session && (
+                                  <div className="absolute top-full left-12 right-0 mt-3 z-10 max-w-lg bg-white p-3 border border-slate-100 rounded-md shadow-xs">
+                                    <form onSubmit={(e) => handleAddComment(e, rootComment.id)} className="space-y-3">
+                                      <textarea
+                                        value={replyText}
+                                        onChange={(e) => setReplyText(e.target.value)}
+                                        placeholder={`Trả lời ${reply.userName}...`}
+                                        rows={3}
+                                        className="w-full border-2 border-slate-200 rounded-[4px] p-3 text-[14px] placeholder:text-[14px] placeholder:text-slate-400 outline-hidden focus:border-[#E96E4A] transition"
+                                        required
+                                      />
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="submit"
+                                          disabled={submitting}
+                                          className="bg-[#E96E4A] text-white text-[12px] font-semibold px-4 py-2 uppercase hover:bg-[#d85c39] transition-colors rounded-[3px] tracking-wider"
+                                        >
+                                          {submitting ? 'Submitting...' : 'Submit'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setReplyToId(null);
+                                            setReplyText('');
+                                          }}
+                                          className="border border-slate-300 text-slate-500 text-[10px] font-extrabold px-4 py-2 uppercase hover:bg-slate-50 transition-colors rounded-[3px] tracking-wider"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </form>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Form để lại bình luận mới */}
+              <div className="mt-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight shrink-0">Leave A Reply</h3>
+                  <div className="h-px w-full bg-slate-100"></div>
+                </div>
+
+                {!session ? (
+                  <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-[8px] p-8 text-center my-6">
+                    <p className="text-slate-500 text-[15px] mb-4">Bạn cần đăng nhập để viết bình luận cho bài viết này.</p>
+                    <Link
+                      href="/login"
+                      className="inline-block bg-[#E96E4A] hover:bg-[#d85c39] text-white text-[11px] font-extrabold tracking-widest px-8 py-3 uppercase transition-colors rounded-[3px]"
+                    >
+                      Đăng nhập ngay
+                    </Link>
+                  </div>
+                ) : (
+                  <form onSubmit={(e) => handleAddComment(e, null)} className="space-y-4">
+                    <div>
+                      <textarea
+                        value={commentText}
+                        onChange={(e) => setCommentText(e.target.value)}
+                        placeholder="Message"
+                        rows={3}
+                        className="w-full border-2 border-slate-200 rounded-[4px] p-4 text-[15px] placeholder:text-[15px] placeholder:text-slate-400 outline-hidden focus:border-[#E96E4A] transition"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="bg-[#E96E4A] text-white text-sm font-semibold tracking-wider px-8 py-3.5 uppercase hover:bg-[#d85c39] transition-colors rounded-[3px]"
+                      >
+                        {submitting ? 'Submitting...' : 'Submit'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </div>
 
             {/* Related Posts Section */}
             {relatedPosts.length > 0 && (
