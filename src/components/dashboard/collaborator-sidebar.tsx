@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   FileText,
+  MessageSquare,
   LogOut,
   X
 } from 'lucide-react';
@@ -24,6 +25,7 @@ export const CollaboratorSidebar = ({ isOpen, onClose }: CollaboratorSidebarProp
       items: [
         { name: 'Dashboard', href: '/collaborator/dashboard', icon: LayoutDashboard },
         { name: 'Bài viết của tôi', href: '/collaborator/posts', icon: FileText },
+        { name: 'Bình luận', href: '/collaborator/comments', icon: MessageSquare },
       ]
     },
   ];
