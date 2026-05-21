@@ -9,6 +9,7 @@ export async function GET(
     const { slug } = await params;
     const result = await pool.query(
       `SELECT p.id, p.title, p.slug, p.content, p.thumbnail, p."createdAt", p.description, p.is_featured as "isFeatured",
+              p."authorId" as "authorId",
               c.name as "categoryName", c.slug as "categorySlug",
               COALESCE(p."customAuthor", u.name) as "authorName", u.image as "authorImage"
        FROM posts p

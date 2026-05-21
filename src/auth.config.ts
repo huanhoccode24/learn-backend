@@ -10,7 +10,7 @@ const REFRESH_TOKEN_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 export const authConfig = {
   pages: {
     signIn: '/login',
-    newUser: '/register',
+    newUser: '/register',   
   },
   session: {
     strategy: 'jwt',

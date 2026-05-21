@@ -447,6 +447,11 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
                               <span className="font-semibold text-[13px] text-slate-900">
                                 @{rootComment.userName}
                               </span>
+                              {post?.authorId === rootComment.userId && (
+                                <span className="bg-[#E96E4A] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-[4px] uppercase tracking-wide select-none">
+                                  Tác giả
+                                </span>
+                              )}
                               <span className="text-slate-500 text-[12px] font-normal">
                                 {formatRelativeTime(rootComment.createdAt)}
                               </span>
@@ -539,6 +544,11 @@ export default function BlogPostDetail({ params }: { params: Promise<{ slug: str
                                     <span className="font-semibold text-[13px] text-slate-900">
                                       @{reply.userName}
                                     </span>
+                                    {post?.authorId === reply.userId && (
+                                      <span className="bg-[#E96E4A] text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-[4px] uppercase tracking-wide select-none">
+                                        Tác giả
+                                      </span>
+                                    )}
                                     <span className="text-slate-500 text-[12px] font-normal">
                                       {formatRelativeTime(reply.createdAt)}
                                     </span>

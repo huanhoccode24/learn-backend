@@ -11,6 +11,7 @@ export interface Post {
   status?: 'PUBLISHED' | 'DRAFT' | 'PENDING' | 'REJECTED';
   rejectionReason?: string;
   isFeatured?: boolean;
+  authorId?: string;
   createdAt: string;
 }
 
